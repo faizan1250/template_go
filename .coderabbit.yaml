@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 version: "2"
 language: "en-US"
-tone_instructions: "Act as a Senior Staff Go Engineer and Tech Lead. Be thorough, constructive, and uncompromising on code quality, concurrency safety, clean architecture, and test-driven development (TDD)."
+tone_instructions: "Act as a Senior Staff Full-Stack Software Engineer and Tech Lead specializing in Go and TypeScript. Be thorough, constructive, and uncompromising on code quality, concurrency safety, clean architecture, strict typing, and test-driven development (TDD)."
 reviews:
   profile: "assertive"
   request_changes_workflow: true
@@ -16,12 +16,15 @@ reviews:
       - main
       - master
   path_filters:
+    - "!node_modules/**"
+    - "!.turbo/**"
     - "!vendor/**"
+    - "!bun.lock"
     - "!*.html"
     - "!*.min.*"
-    - "!go.sum"
+    - "!**/dist/**"
   path_instructions:
-    - path: "**/*.go"
+    - path: "apps/backend/**/*.go"
       instructions: |
         - Ensure all Go code complies with Effective Go and Go Code Review Comments.
         - Verify error handling: Errors MUST be wrapped with `fmt.Errorf("...: %w", err)` or checked with `errors.Is` / `errors.As`. Errors must not be ignored or swallowed silently.
@@ -29,17 +32,20 @@ reviews:
         - Interfaces: Interfaces should be small and defined where they are consumed, not where they are implemented.
         - Resource Leaks: Check that `io.Closer` (HTTP request/response bodies, file handles) are properly closed via `defer`.
         - Security: Guard against SQL injection, unchecked user input, sensitive data in logs, and insecure defaults.
-    - path: "**/*_test.go"
+    - path: "apps/backend/**/*_test.go"
       instructions: |
         - Verify Test-Driven Development (TDD) best practices.
         - Tests should be table-driven using subtests (`t.Run(...)`).
         - Ensure both happy paths and failure/edge cases (e.g. invalid inputs, timeouts, empty structs) are thoroughly exercised.
         - Ensure tests use `t.Parallel()` where appropriate and avoid brittle sleep timers in concurrent tests.
         - Verify assertions give clear error failure messages (`got %v, want %v`).
-    - path: "cmd/**"
+    - path: "{apps/frontend,packages}/**/*.{ts,tsx}"
       instructions: |
-        - Ensure `cmd/` packages only handle wiring, configuration parsing, and graceful shutdown (SIGINT/SIGTERM).
-        - Business logic should NOT live inside `cmd/`.
+        - Enforce TypeScript strictness: Do not use `any` (prefer `unknown`, generics, or discriminated unions).
+        - Verify clean code and modular architecture: separate business/data logic from UI presentation.
+        - React / Frontend: Verify proper hook dependency arrays in `useEffect`, `useCallback`, `useMemo`. Prevent unnecessary re-renders.
+        - Security: Prevent XSS, avoid unsafe HTML injections, sanitize user inputs.
+        - TDD / Testing: Ensure all utility logic, custom hooks, and core component behaviors have accompanying unit tests (*.test.ts / *.spec.ts).
     - path: ".github/workflows/**"
       instructions: |
         - Validate GitHub Actions workflow security: check least-privilege permissions, pinned actions, secret protection.
