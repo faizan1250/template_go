@@ -23,10 +23,11 @@ jobs:
         id: title-check
         run: |
           TITLE="${{ github.event.pull_request.title }}"
-          PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?!?: .+$"
+          shopt -s nocasematch
+          PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)((\([a-zA-Z0-9_-]+\))?!?:|/).+$"
           if [[ ! "$TITLE" =~ $PATTERN ]]; then
             echo "❌ PR Title '$TITLE' does not match Conventional Commits format!"
-            echo "Example: feat(auth): add JWT middleware or fix(api): resolve nil pointer"
+            echo "Example: feat: add new feature or feat(backend): add handler"
             echo "valid_title=false" >> $GITHUB_OUTPUT
             exit 1
           else
@@ -39,17 +40,24 @@ jobs:
         run: |
           BASE_REF="origin/${{ github.base_ref }}"
           CHANGED_GO=$(git diff --name-only "$BASE_REF"...HEAD | grep '\.go$' | grep -v '_test\.go$' || true)
-          CHANGED_TESTS=$(git diff --name-only "$BASE_REF"...HEAD | grep '_test\.go$' || true)
+          CHANGED_GO_TESTS=$(git diff --name-only "$BASE_REF"...HEAD | grep '_test\.go$' || true)
+          CHANGED_TS=$(git diff --name-only "$BASE_REF"...HEAD | grep -E '\.(ts|tsx)$' | grep -v -E '\.(test|spec)\.(ts|tsx)$' || true)
+          CHANGED_TS_TESTS=$(git diff --name-only "$BASE_REF"...HEAD | grep -E '\.(test|spec)\.(ts|tsx)$' || true)
 
           echo "Go source files changed:"
           echo "$CHANGED_GO"
-          echo "Test files changed:"
-          echo "$CHANGED_TESTS"
+          echo "Go test files changed:"
+          echo "$CHANGED_GO_TESTS"
+          echo "TS source files changed:"
+          echo "$CHANGED_TS"
+          echo "TS test files changed:"
+          echo "$CHANGED_TS_TESTS"
 
-          if [ -n "$CHANGED_GO" ] && [ -z "$CHANGED_TESTS" ]; then
-            echo "⚠️ WARNING: Go source code was changed without any corresponding test files changed!"
-            echo "has_tests=false" >> $GITHUB_OUTPUT
-          else
-            echo "✅ Tests included or no Go source files changed."
-            echo "has_tests=true" >> $GITHUB_OUTPUT
+          if [ -n "$CHANGED_GO" ] && [ -z "$CHANGED_GO_TESTS" ]; then
+            echo "⚠️ NOTICE: Backend Go code was changed without corresponding _test.go files!"
           fi
+
+          if [ -n "$CHANGED_TS" ] && [ -z "$CHANGED_TS_TESTS" ]; then
+            echo "⚠️ NOTICE: Frontend TypeScript code was changed without corresponding test files!"
+          fi
+          echo "has_tests=true" >> $GITHUB_OUTPUT

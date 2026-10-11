@@ -6,7 +6,7 @@ echo "==> [pre-commit] Checking staged files..."
 
 # 1. Prevent committing sensitive files (.env, credentials, private keys)
 DISALLOWED_FILES_REGEX='(\.env(\..+)?|.*\.pem|.*\.key|.*id_rsa.*)$'
-STAGED_DISALLOWED=$(git diff --cached --name-only | grep -E "$DISALLOWED_FILES_REGEX" || true)
+STAGED_DISALLOWED=$(git diff --cached --name-only | grep -E "$DISALLOWED_FILES_REGEX" | grep -v -E "(\.env\.sample|\.env\.example)" || true)
 
 if [ -n "$STAGED_DISALLOWED" ]; then
     echo "ERROR: Attempting to commit potentially sensitive files:"

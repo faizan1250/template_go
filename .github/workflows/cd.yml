@@ -20,7 +20,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'apps/backend/go.mod'
           check-latest: true
 
       - name: Build Cross-Platform Binaries
@@ -39,21 +39,13 @@ jobs:
           for TARGET in "${TARGETS[@]}"; do
             OS="${TARGET%/*}"
             ARCH="${TARGET#*/}"
-            OUTPUT_NAME="server-${VERSION}-${OS}-${ARCH}"
+            OUTPUT_NAME="backend-${VERSION}-${OS}-${ARCH}"
             if [ "$OS" = "windows" ]; then
               OUTPUT_NAME="${OUTPUT_NAME}.exe"
             fi
 
-            BUILD_PATH="./cmd/server"
-            if [ ! -d "$BUILD_PATH" ]; then
-              if [ -d "./cmd" ]; then
-                BUILD_PATH="./cmd"
-              else
-                BUILD_PATH="."
-              fi
-            fi
-            echo "Building for ${OS}/${ARCH} (${BUILD_PATH}) -> dist/${OUTPUT_NAME}..."
-            GOOS=$OS GOARCH=$ARCH CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o "dist/${OUTPUT_NAME}" "${BUILD_PATH}"
+            echo "Building backend for ${OS}/${ARCH} -> dist/${OUTPUT_NAME}..."
+            (cd apps/backend && GOOS=$OS GOARCH=$ARCH CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o "../../dist/${OUTPUT_NAME}" ./cmd/...)
           done
 
       - name: Generate Checksums

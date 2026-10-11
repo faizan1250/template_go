@@ -1,18 +1,27 @@
-name: CI Pipeline
+name: Backend CI (Go)
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/backend-ci.yml'
 
 permissions:
   contents: read
 
 jobs:
   lint:
-    name: Lint & Formatting
+    name: Backend Lint & Format
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,7 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'apps/backend/go.mod'
           check-latest: true
 
       - name: Verify Formatting (gofmt)
@@ -36,19 +45,23 @@ jobs:
           fi
 
       - name: Golangci-lint
-        if: hashFiles('**/*.go') != ''
-        uses: golangci/golangci-lint-action@v6
+        if: hashFiles('apps/backend/**/*.go') != ''
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.11.4
+          working-directory: apps/backend
           args: --timeout=5m
 
       - name: Report Empty State (Lint)
-        if: hashFiles('**/*.go') == ''
+        if: hashFiles('apps/backend/**/*.go') == ''
         run: echo "No Go source files to lint yet."
 
   security:
-    name: Security & Vulnerabilities
+    name: Backend Security & Vulnerabilities
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,23 +69,27 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'apps/backend/go.mod'
           check-latest: true
 
       - name: Run govulncheck
-        if: hashFiles('**/*.go') != ''
+        if: hashFiles('apps/backend/**/*.go') != ''
         uses: golang/govulncheck-action@v1
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'apps/backend/go.mod'
           go-package: ./...
+          work-dir: apps/backend
 
       - name: Report Empty State (Security)
-        if: hashFiles('**/*.go') == ''
+        if: hashFiles('apps/backend/**/*.go') == ''
         run: echo "No Go packages to scan yet."
 
   test:
-    name: Tests & Coverage
+    name: Backend Tests & Coverage
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -80,7 +97,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'apps/backend/go.mod'
           check-latest: true
 
       - name: Run tests with Race Detector & Coverage
@@ -94,34 +111,37 @@ jobs:
 
       - name: Check Coverage Threshold (>= 80%)
         run: |
-          chmod +x ./scripts/check-coverage.sh
-          ./scripts/check-coverage.sh coverage.out 80
+          chmod +x ../../scripts/check-coverage.sh
+          ../../scripts/check-coverage.sh coverage.out 80
 
       - name: Generate Coverage Summary
         if: always()
         run: |
           if [ -s coverage.out ]; then
-            echo "### 📊 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "### 📊 Backend Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
             echo "| Package / Function | Coverage |" >> $GITHUB_STEP_SUMMARY
             echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
             go tool cover -func=coverage.out | awk '{printf "| `%s` | **%s** |\n", $1, $3}' >> $GITHUB_STEP_SUMMARY
           else
-            echo "### 📊 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
-            echo "No tests or coverage data generated yet." >> $GITHUB_STEP_SUMMARY
+            echo "### 📊 Backend Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "No backend tests or coverage data generated yet." >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload Coverage Artifact
-        if: hashFiles('coverage.out') != ''
+        if: hashFiles('apps/backend/coverage.out') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage.out
+          name: backend-coverage-report
+          path: apps/backend/coverage.out
           retention-days: 14
 
   build:
-    name: Build Verification
+    name: Backend Build Verification
     runs-on: ubuntu-latest
     needs: [lint, test]
+    defaults:
+      run:
+        working-directory: apps/backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -129,10 +149,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'apps/backend/go.mod'
           check-latest: true
 
-      - name: Build All Binaries
+      - name: Build Backend Binaries
         run: |
           if [ -d "./cmd" ]; then
             CGO_ENABLED=0 go build -v -ldflags="-s -w" ./cmd/...

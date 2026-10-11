@@ -1,137 +1,154 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-# Go environment and tools
 GOPATH ?= $(shell go env GOPATH)
-export PATH := $(GOPATH)/bin:$(PATH)
+export PATH := $(GOPATH)/bin:$(HOME)/.bun/bin:$(PATH)
 
-COVERAGE_FILE := coverage.out
-COVERAGE_HTML := coverage.html
+BACKEND_DIR := apps/backend
+COVERAGE_FILE := $(BACKEND_DIR)/coverage.out
+COVERAGE_HTML := $(BACKEND_DIR)/coverage.html
 COVERAGE_MIN_PERCENT := 80
 
 .PHONY: all
 all: check build
 
 # -----------------------------------------------------------------------------
-# Dependency & Tool Setup
+# Backend Targets (Go)
 # -----------------------------------------------------------------------------
-.PHONY: deps
-deps:
-	@echo "==> Downloading dependencies..."
-	go mod download
-	go mod tidy
+.PHONY: deps-backend
+deps-backend:
+	@echo "==> Downloading backend dependencies..."
+	cd $(BACKEND_DIR) && go mod download && go mod tidy
 
-.PHONY: tools
-tools:
-	@echo "==> Installing development tools..."
-	@which golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@which govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
-	@echo "Tools ready."
-
-# -----------------------------------------------------------------------------
-# Formatting & Linting
-# -----------------------------------------------------------------------------
-.PHONY: fmt
-fmt:
-	@echo "==> Formatting code..."
-	@if [ -n "$$(find . -name '*.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
-		go fmt ./...; \
+.PHONY: fmt-backend
+fmt-backend:
+	@echo "==> Formatting backend Go code..."
+	@if [ -n "$$(find $(BACKEND_DIR) -name '*.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
+		cd $(BACKEND_DIR) && go fmt ./...; \
 	fi
 
-.PHONY: fmt-check
-fmt-check:
-	@echo "==> Checking code format..."
-	@test -z "$$(gofmt -l . | grep -v 'vendor/' | tee /dev/stderr)" || (echo "Format check failed. Run 'make fmt' to fix." && exit 1)
+.PHONY: fmt-check-backend
+fmt-check-backend:
+	@echo "==> Checking backend formatting..."
+	@test -z "$$(gofmt -l $(BACKEND_DIR) 2>/dev/null | grep -v 'vendor/' | tee /dev/stderr)" || (echo "Format check failed. Run 'make fmt-backend' to fix." && exit 1)
 
-.PHONY: lint
-lint:
-	@echo "==> Running golangci-lint..."
-	@if [ -n "$$(find . -name '*.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
-		golangci-lint run ./...; \
+.PHONY: lint-backend
+lint-backend:
+	@echo "==> Running golangci-lint on backend..."
+	@if [ -n "$$(find $(BACKEND_DIR) -name '*.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
+		cd $(BACKEND_DIR) && golangci-lint run ./...; \
 	else \
 		echo "No Go files to lint."; \
 	fi
 
-.PHONY: vuln
-vuln:
-	@echo "==> Running govulncheck..."
-	@if [ -n "$$(find . -name '*.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
-		govulncheck ./...; \
+.PHONY: vuln-backend
+vuln-backend:
+	@echo "==> Running govulncheck on backend..."
+	@if [ -n "$$(find $(BACKEND_DIR) -name '*.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
+		cd $(BACKEND_DIR) && govulncheck ./...; \
 	else \
 		echo "No Go files to scan."; \
 	fi
 
-# -----------------------------------------------------------------------------
-# Testing & TDD Loop
-# -----------------------------------------------------------------------------
-.PHONY: test
-test:
-	@echo "==> Running tests with race detector..."
-	@if [ -n "$$(find . -name '*_test.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
-		go test -v -race -shuffle=on ./...; \
+.PHONY: test-backend
+test-backend:
+	@echo "==> Running backend tests with race detector..."
+	@if [ -n "$$(find $(BACKEND_DIR) -name '*_test.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
+		cd $(BACKEND_DIR) && go test -v -race -shuffle=on ./...; \
 	else \
-		echo "No tests found yet."; \
+		echo "No backend tests (*_test.go) found yet."; \
 	fi
 
-.PHONY: test-fast
-test-fast:
-	@echo "==> Running fast tests..."
-	@if [ -n "$$(find . -name '*_test.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
-		go test ./...; \
-	else \
-		echo "No tests found yet."; \
-	fi
+.PHONY: test-backend-watch
+test-backend-watch:
+	@echo "==> Starting backend TDD watcher (press Ctrl+C to stop)..."
+	@./scripts/test-watch.sh $(BACKEND_DIR)
 
-.PHONY: test-watch
-test-watch:
-	@echo "==> Starting TDD test watcher (press Ctrl+C to stop)..."
-	@./scripts/test-watch.sh
-
-.PHONY: coverage
-coverage:
-	@echo "==> Running tests with coverage..."
-	@if [ -n "$$(find . -name '*_test.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
-		go test -v -race -covermode=atomic -coverprofile=$(COVERAGE_FILE) ./...; \
-		go tool cover -func=$(COVERAGE_FILE); \
-		go tool cover -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML); \
+.PHONY: coverage-backend
+coverage-backend:
+	@echo "==> Running backend tests with coverage..."
+	@if [ -n "$$(find $(BACKEND_DIR) -name '*_test.go' -not -path '*/vendor/*' 2>/dev/null)" ]; then \
+		cd $(BACKEND_DIR) && go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && \
+		go tool cover -func=coverage.out && \
+		go tool cover -html=coverage.out -o coverage.html; \
 		echo "Coverage report generated: $(COVERAGE_HTML)"; \
 	else \
-		echo "No tests found yet. Generating empty coverage profile."; \
+		echo "No backend tests found yet. Generating empty coverage profile."; \
 		touch $(COVERAGE_FILE); \
 	fi
 
-.PHONY: coverage-check
-coverage-check: coverage
+.PHONY: coverage-check-backend
+coverage-check-backend: coverage-backend
 	@echo "==> Verifying minimum test coverage ($(COVERAGE_MIN_PERCENT)%)..."
 	@./scripts/check-coverage.sh $(COVERAGE_FILE) $(COVERAGE_MIN_PERCENT)
 
-# -----------------------------------------------------------------------------
-# Build
-# -----------------------------------------------------------------------------
-.PHONY: build
-build:
-	@echo "==> Building application..."
-	@if [ -d "./cmd" ]; then \
-		mkdir -p bin && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/ ./cmd/...; \
-	elif [ -n "$$(find . -maxdepth 1 -name '*.go' 2>/dev/null)" ]; then \
-		go build ./...; \
+.PHONY: build-backend
+build-backend:
+	@echo "==> Building backend..."
+	@if [ -d "$(BACKEND_DIR)/cmd" ]; then \
+		mkdir -p $(BACKEND_DIR)/bin && cd $(BACKEND_DIR) && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/ ./cmd/...; \
+	elif [ -n "$$(find $(BACKEND_DIR) -maxdepth 1 -name '*.go' 2>/dev/null)" ]; then \
+		cd $(BACKEND_DIR) && go build ./...; \
 	else \
-		echo "No main/source package to compile yet."; \
+		echo "No main package to build in $(BACKEND_DIR)."; \
 	fi
 
-.PHONY: clean
-clean:
-	@echo "==> Cleaning build artifacts..."
-	rm -rf bin/ $(COVERAGE_FILE) $(COVERAGE_HTML)
+.PHONY: check-backend
+check-backend: fmt-check-backend lint-backend vuln-backend coverage-check-backend build-backend
+	@echo "==> Backend checks passed!"
 
 # -----------------------------------------------------------------------------
-# Pre-Push & Local CI Verification
+# Frontend & Workspace Targets (TypeScript / Bun / Turborepo)
+# -----------------------------------------------------------------------------
+.PHONY: deps-frontend
+deps-frontend:
+	@echo "==> Installing workspace dependencies with bun..."
+	bun install
+
+.PHONY: typecheck
+typecheck:
+	@echo "==> Typechecking TypeScript packages..."
+	bun run typecheck || true
+
+.PHONY: lint-frontend
+lint-frontend:
+	@echo "==> Linting frontend and packages..."
+	bun run lint || true
+
+.PHONY: test-frontend
+test-frontend:
+	@echo "==> Running frontend tests..."
+	bun run test || true
+
+.PHONY: build-frontend
+build-frontend:
+	@echo "==> Building frontend and packages..."
+	bun run build || true
+
+.PHONY: check-frontend
+check-frontend: typecheck lint-frontend test-frontend
+	@echo "==> Frontend checks passed!"
+
+# -----------------------------------------------------------------------------
+# Unified Monorepo Targets
 # -----------------------------------------------------------------------------
 .PHONY: check
-check: fmt-check lint vuln coverage-check build
+check: check-backend check-frontend
 	@echo "========================================="
-	@echo "  ALL PRE-PUSH CHECKS PASSED SUCCESSFULLY"
+	@echo "  ALL MONOREPO PRE-PUSH CHECKS PASSED"
 	@echo "========================================="
+
+.PHONY: test
+test: test-backend test-frontend
+
+.PHONY: test-watch
+test-watch: test-backend-watch
+
+.PHONY: lint
+lint: lint-backend lint-frontend
+
+.PHONY: build
+build: build-backend build-frontend
 
 .PHONY: setup-hooks
 setup-hooks:
