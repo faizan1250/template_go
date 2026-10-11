@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Git Pre-Push Hook: Professional Quality Gate
+# Runs full test suite, race detector, linter, vulnerability check, and coverage enforcement before pushing to remote.
+set -euo pipefail
+
+echo "=========================================================="
+echo "==> [pre-push] Running local quality gates..."
+echo "    - Linter (golangci-lint)"
+echo "    - Vulnerability check (govulncheck)"
+echo "    - Unit & Integration tests (-race)"
+echo "    - Coverage threshold check (>= 80%)"
+echo "    - Build verification"
+echo "=========================================================="
+
+if ! make check; then
+    echo ""
+    echo "❌ [pre-push] Push rejected! Local verification failed."
+    echo "Fix the issues above before pushing to GitHub."
+    echo "Tip: Run 'make check' to debug issues locally."
+    exit 1
+fi
+
+echo ""
+echo "✅ [pre-push] All checks passed cleanly! Proceeding with push."
+exit 0

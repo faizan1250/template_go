@@ -1,0 +1,70 @@
+name: Release Pipeline (CD)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Build Cross-Platform Binaries
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME:-dev}"
+
+          TARGETS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+
+          for TARGET in "${TARGETS[@]}"; do
+            OS="${TARGET%/*}"
+            ARCH="${TARGET#*/}"
+            OUTPUT_NAME="server-${VERSION}-${OS}-${ARCH}"
+            if [ "$OS" = "windows" ]; then
+              OUTPUT_NAME="${OUTPUT_NAME}.exe"
+            fi
+
+            BUILD_PATH="./cmd/server"
+            if [ ! -d "$BUILD_PATH" ]; then
+              if [ -d "./cmd" ]; then
+                BUILD_PATH="./cmd"
+              else
+                BUILD_PATH="."
+              fi
+            fi
+            echo "Building for ${OS}/${ARCH} (${BUILD_PATH}) -> dist/${OUTPUT_NAME}..."
+            GOOS=$OS GOARCH=$ARCH CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o "dist/${OUTPUT_NAME}" "${BUILD_PATH}"
+          done
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true

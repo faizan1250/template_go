@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Git Pre-Commit Hook: Fast formatting & safety validation
+set -euo pipefail
+
+echo "==> [pre-commit] Checking staged files..."
+
+# 1. Prevent committing sensitive files (.env, credentials, private keys)
+DISALLOWED_FILES_REGEX='(\.env(\..+)?|.*\.pem|.*\.key|.*id_rsa.*)$'
+STAGED_DISALLOWED=$(git diff --cached --name-only | grep -E "$DISALLOWED_FILES_REGEX" || true)
+
+if [ -n "$STAGED_DISALLOWED" ]; then
+    echo "ERROR: Attempting to commit potentially sensitive files:"
+    echo "$STAGED_DISALLOWED"
+    echo "Aborting commit. Remove these files or unstage them."
+    exit 1
+fi
+
+# 2. Check Go formatting on staged Go files
+STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+
+if [ -n "$STAGED_GO_FILES" ]; then
+    UNFORMATTED=$(gofmt -l $STAGED_GO_FILES 2>/dev/null || true)
+    if [ -n "$UNFORMATTED" ]; then
+        echo "ERROR: The following staged files are not formatted:"
+        echo "$UNFORMATTED"
+        echo "Please run 'make fmt' and stage changes again."
+        exit 1
+    fi
+fi
+
+echo "==> [pre-commit] Checks passed."
+exit 0
