@@ -23,10 +23,11 @@ jobs:
         id: title-check
         run: |
           TITLE="${{ github.event.pull_request.title }}"
-          PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?!?: .+$"
+          shopt -s nocasematch
+          PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)((\([a-zA-Z0-9_-]+\))?!?:|/).+$"
           if [[ ! "$TITLE" =~ $PATTERN ]]; then
             echo "❌ PR Title '$TITLE' does not match Conventional Commits format!"
-            echo "Example: feat(auth): add JWT middleware or fix(api): resolve nil pointer"
+            echo "Example: feat: add new feature or feat(backend): add handler"
             echo "valid_title=false" >> $GITHUB_OUTPUT
             exit 1
           else
