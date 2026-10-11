@@ -212,6 +212,9 @@ linters:
           - gosec
           - noctx
           - wrapcheck
+      - path: "cmd/"
+        linters:
+          - forbidigo
 
 issues:
   max-same-issues: 50

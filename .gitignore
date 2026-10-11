@@ -6,6 +6,8 @@
 *.dylib
 bin/
 dist/
+template_go
+apps/**/template_go
 *.bck.yml
 
 # Test binaries and coverage
