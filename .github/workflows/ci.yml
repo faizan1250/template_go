@@ -25,17 +25,26 @@ jobs:
 
       - name: Verify Formatting (gofmt)
         run: |
-          if [ -n "$(gofmt -l .)" ]; then
-            echo "Unformatted Go files detected:"
-            gofmt -l .
-            exit 1
+          if [ -n "$(find . -name '*.go' -not -path '*/vendor/*')" ]; then
+            if [ -n "$(gofmt -l .)" ]; then
+              echo "Unformatted Go files detected:"
+              gofmt -l .
+              exit 1
+            fi
+          else
+            echo "No Go source files found yet. Skipping format check."
           fi
 
       - name: Golangci-lint
+        if: hashFiles('**/*.go') != ''
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout=5m
+
+      - name: Report Empty State (Lint)
+        if: hashFiles('**/*.go') == ''
+        run: echo "No Go source files to lint yet."
 
   security:
     name: Security & Vulnerabilities
@@ -51,10 +60,15 @@ jobs:
           check-latest: true
 
       - name: Run govulncheck
+        if: hashFiles('**/*.go') != ''
         uses: golang/govulncheck-action@v1
         with:
           go-version-file: 'go.mod'
           go-package: ./...
+
+      - name: Report Empty State (Security)
+        if: hashFiles('**/*.go') == ''
+        run: echo "No Go packages to scan yet."
 
   test:
     name: Tests & Coverage
@@ -71,7 +85,12 @@ jobs:
 
       - name: Run tests with Race Detector & Coverage
         run: |
-          go test -v -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+          if [ -n "$(find . -name '*_test.go' -not -path '*/vendor/*')" ]; then
+            go test -v -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+          else
+            echo "No test files (*_test.go) found yet. Creating empty coverage profile."
+            touch coverage.out
+          fi
 
       - name: Check Coverage Threshold (>= 80%)
         run: |
@@ -81,14 +100,18 @@ jobs:
       - name: Generate Coverage Summary
         if: always()
         run: |
-          if [ -f coverage.out ]; then
+          if [ -s coverage.out ]; then
             echo "### 📊 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
             echo "| Package / Function | Coverage |" >> $GITHUB_STEP_SUMMARY
             echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
             go tool cover -func=coverage.out | awk '{printf "| `%s` | **%s** |\n", $1, $3}' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 📊 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "No tests or coverage data generated yet." >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload Coverage Artifact
+        if: hashFiles('coverage.out') != ''
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -113,6 +136,8 @@ jobs:
         run: |
           if [ -d "./cmd" ]; then
             CGO_ENABLED=0 go build -v -ldflags="-s -w" ./cmd/...
-          else
+          elif [ -n "$(find . -maxdepth 1 -name '*.go')" ]; then
             CGO_ENABLED=0 go build -v -ldflags="-s -w" ./...
+          else
+            echo "No Go source code to build yet."
           fi
